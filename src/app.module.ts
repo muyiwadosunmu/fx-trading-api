@@ -21,18 +21,32 @@ import { V1Module } from './modules/v1/v1.module';
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        uri: configService.get<string>('DATABASE_URL'),
-        // host: configService.get<string>('DB_HOST', 'localhost'),
-        // port: configService.get<number>('DB_PORT', 5432),
-        // username: configService.get<string>('DB_USER', 'postgres'),
-        // password: configService.get<string>('DB_PASSWORD', 'postgres'),
-        database: configService.get<string>('DB_NAME', 'fx_trading_db'),
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: false, // Auto create/update tables for dev
-        logging: process.env.NODE_ENV === 'development' ? true : false, // Set to true if more debugging info is needed
-      }),
+      useFactory: (configService: ConfigService) => {
+        const dbSslEnabled =
+          (
+            configService.get<string>('DB_SSL', 'true') || 'true'
+          ).toLowerCase() === 'true';
+        const dbSslRejectUnauthorized =
+          (
+            configService.get<string>('DB_SSL_REJECT_UNAUTHORIZED', 'false') ||
+            'false'
+          ).toLowerCase() === 'true';
+
+        return {
+          type: 'postgres',
+          url: configService.get<string>('DATABASE_URL'),
+          database: configService.get<string>('DB_NAME', 'fx_trading_db'),
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          synchronize: false,
+          logging: process.env.NODE_ENV === 'development' ? true : false,
+          ssl: dbSslEnabled
+            ? { rejectUnauthorized: dbSslRejectUnauthorized }
+            : false,
+          extra: dbSslEnabled
+            ? { ssl: { rejectUnauthorized: dbSslRejectUnauthorized } }
+            : undefined,
+        };
+      },
       inject: [ConfigService],
     }),
     JwtModule.registerAsync({
