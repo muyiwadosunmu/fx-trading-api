@@ -4,7 +4,6 @@ import { APP_FILTER } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
-import * as redisStore from 'cache-manager-redis-store';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CoreModule } from './core/core.module';
@@ -13,15 +12,9 @@ import { V1Module } from './modules/v1/v1.module';
 
 @Module({
   imports: [
-    CacheModule.registerAsync({
+    CacheModule.register({
       isGlobal: true,
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        store: redisStore,
-        host: configService.get('REDIS_HOST', 'localhost'),
-        port: configService.get('REDIS_PORT', 6379),
-      }),
-      inject: [ConfigService],
+      ttl: 30000, // Cache TTL in seconds (e.g., 30 seconds)
     }),
     ConfigModule.forRoot({
       isGlobal: true,
@@ -46,7 +39,9 @@ import { V1Module } from './modules/v1/v1.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         secret: configService.getOrThrow<string>('ACCESS_TOKEN_SECRET'),
-        signOptions: { expiresIn: `${configService.getOrThrow<number>('JWT_EXPIRY')}s` },
+        signOptions: {
+          expiresIn: `${configService.getOrThrow<number>('JWT_EXPIRY')}s`,
+        },
       }),
       inject: [ConfigService],
     }),
@@ -62,4 +57,4 @@ import { V1Module } from './modules/v1/v1.module';
     },
   ],
 })
-export class AppModule { }
+export class AppModule {}

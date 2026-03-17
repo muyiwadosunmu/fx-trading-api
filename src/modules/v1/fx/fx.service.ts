@@ -4,57 +4,91 @@ import { firstValueFrom } from 'rxjs';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 
+interface ExchangeRateLatestResponse {
+  result: string;
+  conversion_rates?: Record<string, number>;
+  'error-type'?: string;
+}
+
 @Injectable()
 export class FxService {
-    private readonly logger = new Logger(FxService.name);
-    private readonly CACHE_KEY = 'fxRates';
-    // Redis cache TTL usually expects seconds, caching for 5 minutes
-    private readonly CACHE_TTL = 300;
+  private readonly logger = new Logger(FxService.name);
+  private readonly CACHE_KEY = 'fxRates';
+  private readonly CACHE_TTL = 300;
+  private readonly exchangeRateBaseUrl =
+    process.env.EXCHANGE_RATE_API_BASE_URL ||
+    'https://v6.exchangerate-api.com/v6';
+  private readonly exchangeRateApiKey =
+    process.env.EXCHANGE_RATE_API_KEY || process.env.FIXER_API_KEY;
 
-    constructor(
-        private readonly httpService: HttpService,
-        @Inject(CACHE_MANAGER) private cacheManager: Cache,
-    ) { }
+  constructor(
+    private readonly httpService: HttpService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+  ) {}
 
-    async getRates(baseCurrency: string = 'USD'): Promise<Record<string, number>> {
-        const cachedRates: Record<string, number> | undefined = await this.cacheManager.get(this.CACHE_KEY);
-        if (cachedRates) {
-            this.logger.log('Retrieved FX rates from Redis cache');
-            return cachedRates;
-        }
-
-        try {
-            const response = await firstValueFrom(
-                this.httpService.get(`https://open.er-api.com/v6/latest/${baseCurrency}`)
-            );
-            if (response.data && response.data.rates) {
-                const rates = response.data.rates;
-                await this.cacheManager.set(this.CACHE_KEY, rates, this.CACHE_TTL * 1000); // Set using ms or config object depending on version
-                this.logger.log('Successfully fetched and cached FX rates in Redis');
-                return rates;
-            }
-            throw new Error('Invalid response structure from FX API');
-        } catch (error) {
-            this.logger.error('Failed to fetch FX rates, falling back to cache if available', error);
-            const expiredCache: Record<string, number> | undefined = await this.cacheManager.get(this.CACHE_KEY);
-            if (expiredCache) {
-                return expiredCache;
-            }
-            throw error;
-        }
+  async getRates(baseCurrency = 'USD'): Promise<Record<string, number>> {
+    if (!this.exchangeRateApiKey) {
+      throw new Error('EXCHANGE_RATE_API_KEY is not configured');
     }
 
-    async getExchangeRate(fromCurrency: string, toCurrency: string): Promise<number> {
-        const rates = await this.getRates('USD');
-        const fromRate = rates[fromCurrency.toUpperCase()];
-        const toRate = rates[toCurrency.toUpperCase()];
+    const normalizedBase = baseCurrency.toUpperCase();
+    const cacheKey = `${this.CACHE_KEY}:${normalizedBase}`;
 
-        if (!fromRate || !toRate) {
-            throw new Error('Unsupported currency pair');
-        }
-
-        // Convert: (Amount / fromRate) * toRate
-        // So the conversion rate is toRate / fromRate
-        return toRate / fromRate;
+    const cachedRates: Record<string, number> | undefined =
+      await this.cacheManager.get(cacheKey);
+    if (cachedRates) {
+      this.logger.log('Retrieved FX rates from Redis cache');
+      return cachedRates;
     }
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<ExchangeRateLatestResponse>(
+          `${this.exchangeRateBaseUrl}/${this.exchangeRateApiKey}/latest/${normalizedBase}`,
+        ),
+      );
+      if (
+        response.data?.result === 'success' &&
+        response.data.conversion_rates
+      ) {
+        const rates = response.data.conversion_rates;
+        await this.cacheManager.set(cacheKey, rates, this.CACHE_TTL * 1000);
+        this.logger.log('Successfully fetched and cached FX rates in Redis');
+        return rates;
+      }
+
+      throw new Error(
+        response.data?.['error-type'] ||
+          'Invalid response structure from ExchangeRate API',
+      );
+    } catch (error) {
+      this.logger.error(
+        'Failed to fetch FX rates, falling back to cache if available',
+        error,
+      );
+      const expiredCache: Record<string, number> | undefined =
+        await this.cacheManager.get(cacheKey);
+      if (expiredCache) {
+        return expiredCache;
+      }
+      throw error;
+    }
+  }
+
+  async getExchangeRate(
+    fromCurrency: string,
+    toCurrency: string,
+  ): Promise<number> {
+    const from = fromCurrency.toUpperCase();
+    const to = toCurrency.toUpperCase();
+
+    const rates = await this.getRates(from);
+    const rate = rates[to];
+
+    if (!rate) {
+      throw new Error('Unsupported currency pair');
+    }
+
+    return rate;
+  }
 }
