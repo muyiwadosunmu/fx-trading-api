@@ -43,7 +43,7 @@ export class WalletController {
     const result = await this.walletService.fundWallet(
       user.id,
       body.currency,
-      body.amount,
+      body.amountMinor,
       idempotencyKey,
     );
     return APIRes(result, result.message);
@@ -60,7 +60,7 @@ export class WalletController {
       user.id,
       body.fromCurrency,
       body.toCurrency,
-      body.amount,
+      body.amountMinor,
       false,
       idempotencyKey,
     );
@@ -78,7 +78,7 @@ export class WalletController {
       user.id,
       body.fromCurrency,
       body.toCurrency,
-      body.amount,
+      body.amountMinor,
       idempotencyKey,
     );
     return APIRes(result, result.message);
@@ -108,7 +108,7 @@ export class WalletController {
     const data = await this.walletService.getConversionQuote(
       query.fromCurrency,
       query.toCurrency,
-      body.amount,
+      body.amountMinor,
     );
     return APIRes(data, 'Quote fetched successfully');
   }

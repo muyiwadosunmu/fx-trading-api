@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsEnum, IsNumber, IsString, Min } from 'class-validator';
 import { CurrencyCode } from 'src/modules/v1/fx/enums/currency.enum';
 
@@ -12,10 +12,11 @@ export class FundWalletDto {
   })
   currency: CurrencyCode;
 
-  @IsNumber()
+  @Transform(({ value }) => value)
+  @Type(() => Number)
+  @IsNumber({}, { message: 'amountMinor must be a number in minor units' })
   @Min(500000, {
-    message:
-      'Minimum funding amount is 500000 of base values like kobo, pence, cents etc.',
+    message: 'Minimum funding amount is 500000 minor units (kobo/cents/pence)',
   })
-  amount: number;
+  amountMinor: number;
 }

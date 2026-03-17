@@ -26,6 +26,18 @@ import { TransferFundsDto } from './dto/transfer-funds.dto';
 export class WalletService {
   private readonly RATE_SCALE = 1_000_000;
   private readonly BPS_BASE = 10_000;
+  private readonly CURRENCY_DECIMALS: Record<string, number> = {
+    JPY: 0,
+    KRW: 0,
+    VND: 0,
+    BHD: 3,
+    IQD: 3,
+    JOD: 3,
+    KWD: 3,
+    LYD: 3,
+    OMR: 3,
+    TND: 3,
+  };
 
   constructor(
     @InjectRepository(Wallet)
@@ -149,7 +161,7 @@ export class WalletService {
         fromCurrency,
         toCurrency,
       );
-      const quote = this.buildFxQuote(amount, rate);
+      const quote = this.buildFxQuote(amount, rate, fromCurrency, toCurrency);
       const convertedAmount = quote.netAmountMinor;
 
       // Lock the source wallet row to prevent concurrent spending
@@ -249,7 +261,7 @@ export class WalletService {
       );
     }
 
-    if (!Number.isInteger(body.amount) || body.amount <= 0) {
+    if (!Number.isInteger(body.amountMinor) || body.amountMinor <= 0) {
       throw new BadRequestException(
         'Transfer amount must be a positive integer in minor units',
       );
@@ -306,7 +318,7 @@ export class WalletService {
         lock: { mode: 'pessimistic_write' },
       });
 
-      if (!senderWallet || Number(senderWallet.balance) < body.amount) {
+      if (!senderWallet || Number(senderWallet.balance) < body.amountMinor) {
         throw new BadRequestException(
           `Insufficient balance in ${currency} wallet`,
         );
@@ -325,8 +337,9 @@ export class WalletService {
         });
       }
 
-      senderWallet.balance = Number(senderWallet.balance) - body.amount;
-      recipientWallet.balance = Number(recipientWallet.balance) + body.amount;
+      senderWallet.balance = Number(senderWallet.balance) - body.amountMinor;
+      recipientWallet.balance =
+        Number(recipientWallet.balance) + body.amountMinor;
 
       await queryRunner.manager.save(senderWallet);
       await queryRunner.manager.save(recipientWallet);
@@ -336,7 +349,7 @@ export class WalletService {
         type: TransactionType.TRANSFER,
         fromCurrency: currency,
         toCurrency: currency,
-        amount: body.amount,
+        amount: body.amountMinor,
         status: 'SUCCESS',
         idempotencyKey,
       });
@@ -346,7 +359,7 @@ export class WalletService {
         type: TransactionType.TRANSFER,
         fromCurrency: currency,
         toCurrency: currency,
-        amount: body.amount,
+        amount: body.amountMinor,
         status: 'SUCCESS',
       });
 
@@ -358,7 +371,7 @@ export class WalletService {
         message: 'Transfer successful',
         transfer: {
           currency,
-          amount: body.amount,
+          amountMinor: body.amountMinor,
           sender: { id: sender.id, email: sender.email },
           recipient: { id: recipient.id, email: recipient.email },
           transactionId: senderTx.id,
@@ -389,7 +402,7 @@ export class WalletService {
     }
 
     const rate = await this.fxService.getExchangeRate(from, to);
-    const quote = this.buildFxQuote(amount, rate);
+    const quote = this.buildFxQuote(amount, rate, from, to);
 
     return {
       fromCurrency: from,
@@ -402,7 +415,12 @@ export class WalletService {
     };
   }
 
-  private buildFxQuote(amountMinor: number, marketRate: number) {
+  private buildFxQuote(
+    amountMinor: number,
+    marketRate: number,
+    fromCurrency: string,
+    toCurrency: string,
+  ) {
     if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
       throw new BadRequestException(
         'Amount must be a positive integer in minor units',
@@ -411,18 +429,24 @@ export class WalletService {
 
     const spreadBps = this.parseBps(process.env.FX_SPREAD_BPS, 0);
     const feeBps = this.parseBps(process.env.FX_FEE_BPS, 0);
+    const fromFactor = this.getMinorFactor(fromCurrency);
+    const toFactor = this.getMinorFactor(toCurrency);
+
+    const sourceAmountMajor = amountMinor / fromFactor;
+    const grossAmountMajor = sourceAmountMajor * marketRate;
+    const gross = Math.floor(grossAmountMajor * toFactor);
     const scaledRate = Math.floor(marketRate * this.RATE_SCALE);
 
-    if (scaledRate <= 0) {
+    if (scaledRate <= 0 || gross <= 0) {
       throw new BadRequestException('Invalid exchange rate received');
     }
 
-    const sourceAmount = amountMinor;
-    const gross = Math.floor((sourceAmount * scaledRate) / this.RATE_SCALE);
     const spreadAmount = Math.floor((gross * spreadBps) / this.BPS_BASE);
     const feeAmount = Math.floor((gross * feeBps) / this.BPS_BASE);
     const net = gross - spreadAmount - feeAmount;
-    const roundingRemainder = (sourceAmount * scaledRate) % this.RATE_SCALE;
+    const roundingRemainderScaled = Math.floor(
+      (grossAmountMajor * toFactor - gross) * this.RATE_SCALE,
+    );
 
     if (net <= 0) {
       throw new BadRequestException(
@@ -440,12 +464,20 @@ export class WalletService {
       feeBps,
       feeAmountMinor: this.ensureSafeInteger(feeAmount),
       netAmountMinor,
-      // Flooring happens during scaled integer division; remainder is audit data.
-      roundingRemainderScaled: this.ensureSafeInteger(roundingRemainder),
+      // Flooring happens on major->minor conversion; remainder is audit data.
+      roundingRemainderScaled: this.ensureSafeInteger(roundingRemainderScaled),
       rateScale: this.RATE_SCALE,
       marketRate,
-      effectiveRate: netAmountMinor / amountMinor,
+      fromMinorFactor: fromFactor,
+      toMinorFactor: toFactor,
+      effectiveRate: netAmountMinor / toFactor / (amountMinor / fromFactor),
     };
+  }
+
+  private getMinorFactor(currency: string): number {
+    const normalized = currency.toUpperCase();
+    const decimals = this.CURRENCY_DECIMALS[normalized] ?? 2;
+    return 10 ** decimals;
   }
 
   private parseBps(value: string | undefined, fallback: number): number {

@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsEmail, IsEnum, IsInt, Min } from 'class-validator';
 import { CurrencyCode } from 'src/modules/v1/fx/enums/currency.enum';
 
@@ -14,9 +14,11 @@ export class TransferFundsDto {
   })
   currency: CurrencyCode;
 
-  @IsInt()
+  @Transform(({ value }) => value)
+  @Type(() => Number)
+  @IsInt({ message: 'amountMinor must be an integer in minor units' })
   @Min(1000, {
-    message: 'Minimum transfer amount is 1000 of actual currency e.g `',
+    message: 'Minimum transfer amount is 1000 minor units (kobo/cents/pence)',
   })
-  amount: number;
+  amountMinor: number;
 }

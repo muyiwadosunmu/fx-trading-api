@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsEnum, IsNumber, IsString, Min } from 'class-validator';
 import { CurrencyCode } from 'src/modules/v1/fx/enums/currency.enum';
 
@@ -21,7 +21,9 @@ export class ConvertCurrencyDto {
   })
   toCurrency: CurrencyCode;
 
-  @IsNumber()
+  @Transform(({ value }) => value)
+  @Type(() => Number)
+  @IsNumber({}, { message: 'amountMinor must be a number in minor units' })
   @Min(100)
-  amount: number;
+  amountMinor: number;
 }

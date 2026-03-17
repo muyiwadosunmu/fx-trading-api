@@ -23,8 +23,9 @@ export class ConversionQuoteQueryDto {
 }
 
 export class ConversionQuoteBodyDto {
-  @IsNumber()
+  @Transform(({ value }) => value)
   @Type(() => Number)
+  @IsNumber({}, { message: 'amountMinor must be a number in minor units' })
   @Min(100)
-  amount: number;
+  amountMinor: number;
 }
