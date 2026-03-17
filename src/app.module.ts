@@ -23,14 +23,14 @@ import { V1Module } from './modules/v1/v1.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
-        // uri: configService.get<string>('DATABASE_URL'),
-        host: configService.get<string>('DB_HOST', 'localhost'),
-        port: configService.get<number>('DB_PORT', 5432),
-        username: configService.get<string>('DB_USER', 'postgres'),
-        password: configService.get<string>('DB_PASSWORD', 'postgres'),
+        uri: configService.get<string>('DATABASE_URL'),
+        // host: configService.get<string>('DB_HOST', 'localhost'),
+        // port: configService.get<number>('DB_PORT', 5432),
+        // username: configService.get<string>('DB_USER', 'postgres'),
+        // password: configService.get<string>('DB_PASSWORD', 'postgres'),
         database: configService.get<string>('DB_NAME', 'fx_trading_db'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: process.env.NODE_ENV === 'development' ? true : false, // Auto create/update tables for dev
+        synchronize: false, // Auto create/update tables for dev
         logging: process.env.NODE_ENV === 'development' ? true : false, // Set to true if more debugging info is needed
       }),
       inject: [ConfigService],
