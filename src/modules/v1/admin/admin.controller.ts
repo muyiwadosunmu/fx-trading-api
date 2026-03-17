@@ -62,8 +62,8 @@ export class AdminController {
 
   @Get('users')
   @UseGuards(AdminAuthGuard)
-  async listUsers(@Query() query: ListUsersQueryDto) {
-    const users = await this.adminService.listUsers(query);
+  async getUsers(@Query() query: ListUsersQueryDto) {
+    const users = await this.adminService.getUsers(query);
     return APIRes(users, 'Users retrieved successfully');
   }
 

@@ -14,7 +14,7 @@ import { V1Module } from './modules/v1/v1.module';
   imports: [
     CacheModule.register({
       isGlobal: true,
-      ttl: 30000, // Cache TTL in seconds (e.g., 30 seconds)
+      ttl: 30000, // Cache TTL 30seconds)
     }),
     ConfigModule.forRoot({
       isGlobal: true,

@@ -1,14 +1,26 @@
-import { Body, Controller, Get, Post, Headers, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Headers,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { APIRes } from 'src/core/common/api-response';
 import { Protected } from 'src/core/decorators/access.decorator';
 import { LoggedInUser } from 'src/core/decorators/logged-in-decorator';
 import { User } from '../users/entities/user.entity';
 import { WalletService } from './wallet.service';
 import { ConvertCurrencyDto } from './dto/convert-currency.dto';
-import { ConversionQuoteQueryDto } from './dto/conversion-quote-query.dto';
+import {
+  ConversionQuoteBodyDto,
+  ConversionQuoteQueryDto,
+} from './dto/conversion-quote-query.dto';
 import { FundWalletDto } from './dto/fund-wallet.dto';
 import { TradeCurrencyDto } from './dto/trade-currency.dto';
 import { TransactionHistoryQueryDto } from './dto/transaction-history-query.dto';
+import { TransferFundsDto } from './dto/transfer-funds.dto';
 
 @Controller('v1/wallet')
 export class WalletController {
@@ -72,18 +84,36 @@ export class WalletController {
     return APIRes(result, result.message);
   }
 
-  @Get('/quote')
+  @Post('transfer')
   @Protected()
-  async getQuote(@Query() query: ConversionQuoteQueryDto) {
+  async transferFunds(
+    @LoggedInUser() user: User,
+    @Body() body: TransferFundsDto,
+    @Headers('x-idempotency-key') idempotencyKey: string,
+  ) {
+    const result = await this.walletService.transferFunds(
+      user.id,
+      body,
+      idempotencyKey,
+    );
+    return APIRes(result, result.message);
+  }
+
+  @Get('quote')
+  @Protected()
+  async getQuote(
+    @Query() query: ConversionQuoteQueryDto,
+    @Body() body: ConversionQuoteBodyDto,
+  ) {
     const data = await this.walletService.getConversionQuote(
       query.fromCurrency,
       query.toCurrency,
-      query.amount,
+      body.amount,
     );
     return APIRes(data, 'Quote fetched successfully');
   }
 
-  @Get('/transactions')
+  @Get('transactions')
   @Protected()
   async getTransactionHistory(
     @LoggedInUser() user: User,
@@ -94,5 +124,18 @@ export class WalletController {
       query,
     );
     return APIRes(transactions, 'Transaction history fetched successfully');
+  }
+
+  @Get('transactions/:id')
+  @Protected()
+  async getSingleTransaction(
+    @LoggedInUser() user: User,
+    @Param('id') id: string,
+  ) {
+    const transaction = await this.walletService.getTransactionById(
+      user.id,
+      id,
+    );
+    return APIRes(transaction, 'Transaction fetched successfully');
   }
 }

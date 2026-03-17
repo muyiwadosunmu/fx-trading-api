@@ -20,9 +20,11 @@ export class ConversionQuoteQueryDto {
     message: 'toCurrency is not supported by configured FX provider',
   })
   toCurrency: CurrencyCode;
+}
 
-  @Type(() => Number)
+export class ConversionQuoteBodyDto {
   @IsNumber()
-  @Min(0.000001)
+  @Type(() => Number)
+  @Min(100)
   amount: number;
 }

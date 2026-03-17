@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Paginated } from 'src/core/common/pagination/interfaces/paginated.interfaces';
 import { PaginationProvider } from 'src/core/common/pagination/providers/pagination.provider';
@@ -16,6 +20,7 @@ import { Transaction, TransactionType } from './entities/transaction.entity';
 import { User } from '../users/entities/user.entity';
 import { FxService } from '../fx/fx.service';
 import { TransactionHistoryQueryDto } from './dto/transaction-history-query.dto';
+import { TransferFundsDto } from './dto/transfer-funds.dto';
 
 @Injectable()
 export class WalletService {
@@ -27,6 +32,8 @@ export class WalletService {
     private readonly walletRepository: Repository<Wallet>,
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     private readonly paginationProvider: PaginationProvider,
     private readonly fxService: FxService,
     private readonly dataSource: DataSource,
@@ -231,6 +238,140 @@ export class WalletService {
     );
   }
 
+  async transferFunds(
+    senderUserId: string,
+    body: TransferFundsDto,
+    idempotencyKey: string,
+  ) {
+    if (!idempotencyKey || !idempotencyKey.trim()) {
+      throw new BadRequestException(
+        'x-idempotency-key header is required for transfer',
+      );
+    }
+
+    if (!Number.isInteger(body.amount) || body.amount <= 0) {
+      throw new BadRequestException(
+        'Transfer amount must be a positive integer in minor units',
+      );
+    }
+
+    const sender = await this.userRepository.findOne({
+      where: { id: senderUserId },
+      select: ['id', 'email'],
+    });
+
+    const recipient = await this.userRepository.findOne({
+      where: { email: body.recipientEmail.toLowerCase() },
+      select: ['id', 'email', 'isSuspended', 'isDeleted', 'isEmailVerified'],
+    });
+
+    if (!sender || !recipient) {
+      throw new NotFoundException('Sender or recipient not found');
+    }
+
+    if (sender.id === recipient.id) {
+      throw new BadRequestException('You cannot transfer funds to yourself');
+    }
+
+    if (
+      !recipient.isEmailVerified ||
+      recipient.isSuspended ||
+      recipient.isDeleted
+    ) {
+      throw new BadRequestException(
+        'Recipient account is not eligible to receive transfer',
+      );
+    }
+
+    const currency = body.currency.toUpperCase();
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const existingTx = await queryRunner.manager.findOne(Transaction, {
+        where: { idempotencyKey },
+      });
+
+      if (existingTx) {
+        await queryRunner.rollbackTransaction();
+        return {
+          message: 'Transfer already processed',
+          transaction: existingTx,
+        };
+      }
+
+      const senderWallet = await queryRunner.manager.findOne(Wallet, {
+        where: { user: { id: sender.id }, currency },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!senderWallet || Number(senderWallet.balance) < body.amount) {
+        throw new BadRequestException(
+          `Insufficient balance in ${currency} wallet`,
+        );
+      }
+
+      let recipientWallet = await queryRunner.manager.findOne(Wallet, {
+        where: { user: { id: recipient.id }, currency },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!recipientWallet) {
+        recipientWallet = queryRunner.manager.create(Wallet, {
+          user: { id: recipient.id } as User,
+          currency,
+          balance: 0,
+        });
+      }
+
+      senderWallet.balance = Number(senderWallet.balance) - body.amount;
+      recipientWallet.balance = Number(recipientWallet.balance) + body.amount;
+
+      await queryRunner.manager.save(senderWallet);
+      await queryRunner.manager.save(recipientWallet);
+
+      const senderTx = queryRunner.manager.create(Transaction, {
+        user: { id: sender.id } as User,
+        type: TransactionType.TRANSFER,
+        fromCurrency: currency,
+        toCurrency: currency,
+        amount: body.amount,
+        status: 'SUCCESS',
+        idempotencyKey,
+      });
+
+      const recipientTx = queryRunner.manager.create(Transaction, {
+        user: { id: recipient.id } as User,
+        type: TransactionType.TRANSFER,
+        fromCurrency: currency,
+        toCurrency: currency,
+        amount: body.amount,
+        status: 'SUCCESS',
+      });
+
+      await queryRunner.manager.save(senderTx);
+      await queryRunner.manager.save(recipientTx);
+      await queryRunner.commitTransaction();
+
+      return {
+        message: 'Transfer successful',
+        transfer: {
+          currency,
+          amount: body.amount,
+          sender: { id: sender.id, email: sender.email },
+          recipient: { id: recipient.id, email: recipient.email },
+          transactionId: senderTx.id,
+        },
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   async getConversionQuote(
     fromCurrency: string,
     toCurrency: string,
@@ -357,5 +498,17 @@ export class WalletService {
       filters,
       order,
     );
+  }
+
+  async getTransactionById(userId: string, id: string): Promise<Transaction> {
+    const transaction = await this.transactionRepository.findOne({
+      where: { id, user: { id: userId } },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    return transaction;
   }
 }

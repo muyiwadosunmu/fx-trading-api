@@ -160,7 +160,7 @@ export class AdminService {
     return saved;
   }
 
-  async listUsers(query: ListUsersQueryDto): Promise<Paginated<User>> {
+  async getUsers(query: ListUsersQueryDto): Promise<Paginated<User>> {
     const { search, page = 1, limit = 10 } = query;
     const direction =
       (query.order || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';

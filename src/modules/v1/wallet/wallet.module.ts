@@ -8,12 +8,13 @@ import { FxModule } from '../fx/fx.module';
 import { AuthModule } from '../auth/auth.module';
 import { CoreModule } from 'src/core/core.module';
 import { JwtModule } from '@nestjs/jwt';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [
     AuthModule,
     JwtModule,
-    TypeOrmModule.forFeature([Wallet, Transaction]),
+    TypeOrmModule.forFeature([Wallet, Transaction, User]),
     FxModule,
     CoreModule,
   ],
