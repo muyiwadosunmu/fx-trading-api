@@ -2,6 +2,38 @@
 
 Backend API for authentication, admin operations, wallets, FX quotes/conversions, and transfers.
 
+## Hosted Base URL
+
+- https://fx-trading-api-sgjt.onrender.com/api
+
+## GitHub Repository
+
+- https://github.com/muyiwadosunmu/fx-trading-api
+
+## API Documentation
+
+- https://fxtrader.apidog.io
+
+## Getting Started
+
+1. Clone the repository.
+2. Create a `.env` file in the project root.
+3. Set your PostgreSQL connection string in `DATABASE_URL`.
+4. Install dependencies.
+5. Run migrations.
+6. Start the API.
+
+```bash
+git clone https://github.com/muyiwadosunmu/fx-trading-api.git
+cd fx-trading-api
+
+# create .env and set DATABASE_URL first
+npm i --legacy-peer-deps
+npm run build
+npm run typeorm:run-migrations
+npm run start:dev
+```
+
 ## Stack
 
 - NestJS + TypeScript
@@ -28,12 +60,17 @@ Create `.env` in the project root.
 ```env
 NODE_ENV=development
 
+# Full connection string (recommended)
+DATABASE_URL=postgresql://username:password@host:5432/database
+
 # Database
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=postgres
 DB_NAME=fx_trading_db
+DB_SSL=true
+DB_SSL_REJECT_UNAUTHORIZED=false
 
 # Auth
 ACCESS_TOKEN_SECRET=replace_with_secure_secret
@@ -137,6 +174,19 @@ npm run typeorm:create-migration --name=YourMigrationName
 ### FX
 
 - `GET /v1/fx/rates?base=USD` get provider rates by base currency.
+
+### Health
+
+- `GET /health` returns service health with current server time.
+
+Example response:
+
+```json
+{
+  "status": "ok",
+  "time": "2026-03-17T12:34:56.789Z"
+}
+```
 
 ## Wallet API Examples
 
