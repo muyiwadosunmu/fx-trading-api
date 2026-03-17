@@ -9,9 +9,9 @@
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
-    "start:dev": "export NODE_ENV=development && nest start --watch",
+    "start:dev": "export NODE_ENV=development && ./node_modules/.bin/nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:staging": "export NODE_ENV=staging && node dist/src/main",
+    "start:staging": "export NODE_ENV=development && node dist/src/main",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
-    "@nestjs/cache-manager": "^3.1.0",
+    "@nestjs/cache-manager": "^2.3.0",
     "@nestjs/common": "^9.0.0",
     "@nestjs/config": "^3.2.2",
     "@nestjs/core": "^9.0.0",
@@ -38,7 +38,6 @@
     "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
     "cache-manager": "^5.7.6",
-    "cache-manager-redis-store": "^3.0.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "express-handlebars": "^7.1.2",
@@ -49,7 +48,8 @@
     "rxjs": "^7.2.0",
     "typeorm": "^0.3.28",
     "uuid": "^11.0.4",
-    "webpack": "^5.91.0"
+    "webpack": "^5.91.0",
+    "zeptomail": "^6.2.1"
   },
   "devDependencies": {
     "@nestjs/cli": "^9.0.0",
@@ -59,6 +59,7 @@
     "@types/express": "^4.17.13",
     "@types/jest": "29.2.4",
     "@types/node": "18.11.18",
+    "@types/nodemailer": "^7.0.11",
     "@types/supertest": "^2.0.11",
     "@typescript-eslint/eslint-plugin": "^5.0.0",
     "@typescript-eslint/parser": "^5.0.0",
@@ -83,6 +84,9 @@
     ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
+    "moduleNameMapper": {
+      "^src/(.*)$": "<rootDir>/$1"
+    },
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },

@@ -1,18 +1,31 @@
 import { Module } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
-import { JwtModule, JwtService } from '@nestjs/jwt';
-import { VerificationSecurity } from 'src/core/security/verification.security';
-import { WebEmail } from 'src/core/email/webEmail';
-import { CoreModule } from 'src/core/core.module';
-import { DatabaseModule } from 'src/core/database/database.module';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CoreModule } from 'src/core/core.module';
+import { VerificationSecurity } from 'src/core/security/verification.security';
 import { User } from '../users/entities/user.entity';
+import { Wallet } from '../wallet/entities/wallet.entity';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
 
 @Module({
   controllers: [AuthController],
-  providers: [AuthService, VerificationSecurity, JwtService, WebEmail],
-  imports: [CoreModule, TypeOrmModule.forFeature([User]), JwtModule],
-  exports: [AuthService, JwtService],
+  providers: [AuthService, VerificationSecurity],
+  imports: [
+    CoreModule,
+    TypeOrmModule.forFeature([User, Wallet]),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.getOrThrow<string>('ACCESS_TOKEN_SECRET'),
+        signOptions: {
+          expiresIn: `${configService.getOrThrow<number>('JWT_EXPIRY')}s`,
+        },
+      }),
+      inject: [ConfigService],
+    }),
+  ],
+  exports: [AuthService],
 })
-export class AuthModule { }
+export class AuthModule {}

@@ -6,12 +6,13 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-export enum Role {
-  USER = 'USER',
+export enum AdminRole {
+  ADMIN = 'ADMIN',
+  SUPER_ADMIN = 'SUPER_ADMIN',
 }
 
-@Entity('users')
-export class User {
+@Entity('admins')
+export class Admin {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -26,29 +27,19 @@ export class User {
 
   @Column({
     type: 'enum',
-    enum: Role,
-    default: Role.USER,
+    enum: AdminRole,
+    default: AdminRole.ADMIN,
   })
-  role: Role;
+  role: AdminRole;
+
+  @Column({ select: false })
+  password?: string;
 
   @Column({ default: false })
   isSuspended: boolean;
 
   @Column({ default: false })
   isDeleted: boolean;
-
-
-  @Column({ select: false })
-  password?: string;
-
-  @Column({ default: false })
-  isEmailVerified: boolean;
-
-  @Column({ nullable: true })
-  otp: string;
-
-  @Column({ type: 'timestamp', nullable: true })
-  otpExpiry: Date;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -8,13 +8,11 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   // Graceful shutdown
   process.on('SIGINT', async () => {
-
     await app.close();
     process.exit(0);
   });
 
   process.on('SIGTERM', async () => {
-
     await app.close();
     process.exit(0);
   });

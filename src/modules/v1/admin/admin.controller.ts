@@ -1,40 +1,97 @@
-import { Controller, Get, Param, Delete, Put, Body, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { APIRes } from 'src/core/common/api-response';
-import { Roles } from 'src/core/decorators/roles.decorator';
-import { RolesGuard } from 'src/core/guard/roles.guard';
-import { Protected } from 'src/core/decorators/access.decorator';
-import { Role } from '../users/entities/user.entity';
-import { UsersService } from '../users/users.service';
+import { LoggedInAdmin } from 'src/core/decorators/logged-in-admin.decorator';
+import { AdminAuthGuard } from 'src/core/guard/admin-auth.guard';
+import { AdminService } from './admin.service';
+import { Admin } from './entities/admin.entity';
+import { AdminLoginDto } from './dto/admin-login.dto';
+import { ListUsersQueryDto } from './dto/list-users-query.dto';
+import { RegisterAdminDto } from './dto/register-admin.dto';
+import { UpdateAdminProfileDto } from './dto/update-admin-profile.dto';
 
-@Controller('v1/admin/users')
-@Protected()
-@UseGuards(RolesGuard)
-@Roles(Role.SUPER_ADMIN, Role.ADMIN)
+@Controller('v1/admin')
 export class AdminController {
-    constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly adminService: AdminService) {}
 
-    @Get()
-    async getAllUsers() {
-        const users = await this.usersService.findAll();
-        return APIRes(users, 'Users retrieved successfully');
-    }
+  @Post('register')
+  async registerFirstAdmin(@Body() body: RegisterAdminDto) {
+    const data = await this.adminService.registerFirstAdmin(body);
+    return APIRes(data, 'Super admin created successfully');
+  }
 
-    @Get(':id')
-    async getUser(@Param('id') id: string) {
-        const user = await this.usersService.findOne(id);
-        return APIRes(user, 'User retrieved successfully');
-    }
+  @Post('login')
+  async login(@Body() body: AdminLoginDto) {
+    const data = await this.adminService.login(body);
+    return APIRes(data, 'Admin login successful');
+  }
 
-    @Put(':id')
-    async updateUser(@Param('id') id: string, @Body() body: any) {
-        const user = await this.usersService.update(id, body);
-        return APIRes(user, 'User updated successfully');
-    }
+  @Get('me')
+  @UseGuards(AdminAuthGuard)
+  async getMe(@LoggedInAdmin() admin: Admin) {
+    return APIRes(admin, 'Admin profile retrieved successfully');
+  }
 
-    @Delete(':id')
-    @Roles(Role.SUPER_ADMIN) // Only Super Admin can delete users
-    async deleteUser(@Param('id') id: string) {
-        await this.usersService.remove(id);
-        return APIRes(null, 'User deleted successfully');
-    }
+  @Patch('me')
+  @UseGuards(AdminAuthGuard)
+  async updateMe(
+    @LoggedInAdmin() admin: Admin,
+    @Body() body: UpdateAdminProfileDto,
+  ) {
+    const data = await this.adminService.updateProfile(admin, body);
+    return APIRes(data, 'Admin profile updated successfully');
+  }
+
+  @Post('create')
+  @UseGuards(AdminAuthGuard)
+  async createAdmin(
+    @LoggedInAdmin() admin: Admin,
+    @Body() body: RegisterAdminDto,
+  ) {
+    const data = await this.adminService.createAdminBySuperAdmin(admin, body);
+    return APIRes(data, 'Admin created successfully');
+  }
+
+  @Get('users')
+  @UseGuards(AdminAuthGuard)
+  async getUsers(@Query() query: ListUsersQueryDto) {
+    const users = await this.adminService.getUsers(query);
+    return APIRes(users, 'Users retrieved successfully');
+  }
+
+  @Patch('users/:id/suspend')
+  @UseGuards(AdminAuthGuard)
+  async suspendUser(@Param('id') id: string) {
+    const user = await this.adminService.suspendUser(id);
+    return APIRes(user, 'User suspended successfully');
+  }
+
+  @Patch('users/:id/unsuspend')
+  @UseGuards(AdminAuthGuard)
+  async unsuspendUser(@Param('id') id: string) {
+    const user = await this.adminService.unsuspendUser(id);
+    return APIRes(user, 'User unsuspended successfully');
+  }
+
+  @Patch('admins/:id/suspend')
+  @UseGuards(AdminAuthGuard)
+  async suspendAdmin(@LoggedInAdmin() admin: Admin, @Param('id') id: string) {
+    const data = await this.adminService.suspendAdmin(admin, id);
+    return APIRes(data, 'Admin suspended successfully');
+  }
+
+  @Patch('admins/:id/unsuspend')
+  @UseGuards(AdminAuthGuard)
+  async unsuspendAdmin(@LoggedInAdmin() admin: Admin, @Param('id') id: string) {
+    const data = await this.adminService.unsuspendAdmin(admin, id);
+    return APIRes(data, 'Admin unsuspended successfully');
+  }
 }

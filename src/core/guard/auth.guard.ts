@@ -3,11 +3,11 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
-  HttpException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { RequestHeaders } from '../constant/header.constant';
 import { AuthService } from 'src/modules/v1/auth/auth.service';
@@ -19,7 +19,8 @@ export class AuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
     private readonly authService: AuthService,
-  ) { }
+    private readonly configService: ConfigService,
+  ) {}
   async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
 
@@ -33,10 +34,18 @@ export class AuthGuard implements CanActivate {
     const token = this.extractBearerToken(request);
 
     // 2. Verify token is valid and for user
-    const { id } = await this.verifyToken(token);
+    const { id, scope } = await this.verifyToken(token);
+
+    if (scope === 'admin') {
+      throw new UnauthorizedException('Use admin endpoints for admin tokens');
+    }
 
     // user information to request.user
     const user = await this.authService.getUserById(id);
+
+    if (!user) {
+      throw new NotFoundException('User not found for this token');
+    }
 
     if (user.isSuspended)
       throw new BadRequestException(
@@ -74,18 +83,20 @@ export class AuthGuard implements CanActivate {
    * @return Id
    */
   private async verifyToken(token: string) {
-    let data;
+    let data: { sub?: string; scope?: string };
     try {
       data = this.jwtService.verify(token, {
-        secret: process.env.ACCESS_TOKEN_SECRET,
+        secret: this.configService.getOrThrow<string>('ACCESS_TOKEN_SECRET'),
       });
     } catch (e) {
-      console.log(e.message);
-      throw new HttpException('Session expired, refresh token', 440);
+      if (e?.name === 'TokenExpiredError') {
+        throw new UnauthorizedException('Session expired, please login again');
+      }
+      throw new UnauthorizedException('Invalid or malformed token');
     }
     if (!data.sub)
       throw new ForbiddenException('Invalid Token, provide access token');
     // token verification for user
-    return { id: data.sub };
+    return { id: data.sub, scope: data.scope };
   }
 }
