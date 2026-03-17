@@ -1,4 +1,4 @@
-import { IsEmail, IsString, Max, Min } from 'class-validator';
+import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class RegisterUserDto {
   @IsEmail()
@@ -10,8 +10,8 @@ export class RegisterUserDto {
   @IsString()
   lastName: string;
 
-  @Max(10, { message: 'Password must be at most 10 characters long' })
-  @Min(4, {
+  @MaxLength(10, { message: 'Password must be at most 10 characters long' })
+  @MinLength(4, {
     message: 'Password must be at least 4 characters long',
   })
   password: string;
