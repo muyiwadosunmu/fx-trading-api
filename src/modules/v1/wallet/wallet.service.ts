@@ -285,11 +285,11 @@ export class WalletService {
       throw new BadRequestException('You cannot transfer funds to yourself');
     }
 
-    if (
-      !recipient.isEmailVerified ||
-      recipient.isSuspended ||
-      recipient.isDeleted
-    ) {
+    if (!recipient.isEmailVerified) {
+      throw new BadRequestException('Recipient wallet does not exist');
+    }
+
+    if (recipient.isSuspended || recipient.isDeleted) {
       throw new BadRequestException(
         'Recipient account is not eligible to receive transfer',
       );
