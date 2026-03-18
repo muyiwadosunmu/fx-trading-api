@@ -348,5 +348,32 @@ describe('WalletService', () => {
         ),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('rejects transfer to unverified recipient', async () => {
+      const sender = { id: 'sender-1', email: 'sender@test.dev' };
+      const recipient = {
+        id: 'recipient-1',
+        email: 'recipient@test.dev',
+        isSuspended: false,
+        isDeleted: false,
+        isEmailVerified: false, 
+      };
+
+      userRepository.findOne
+        .mockResolvedValueOnce(sender)
+        .mockResolvedValueOnce(recipient);
+
+      await expect(
+        service.transferFunds(
+          'sender-1',
+          {
+            recipientEmail: 'recipient@test.dev',
+            currency: CurrencyCode.USD,
+            amountMinor: 1000,
+          },
+          'idem-unverified-1',
+        ),
+      ).rejects.toThrow(new BadRequestException('Recipient wallet does not exist'));
+    });
   });
 });
